@@ -30,8 +30,8 @@ def createTileAreas():
                        align = "left")
     mainTileArea = Box(app,
                        grid = [1,1,1,3],
-                       width = 400,
-                       height = 400,
+                       width = 440,
+                       height = 440,
                        layout = "auto")
     nextTileArea = Box(app,
                        grid = [2,2],
