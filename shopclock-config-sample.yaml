@@ -1,0 +1,17 @@
+# time and date format - see https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
+timeFormat: "%I:%M:%S %p"
+dateFormat: "%A %B %d %Y"
+
+backgroundColor: "#555599"
+timeDateColor: "yellow"
+timeDateBackgroundColor: "black"
+timeDateFont: "Sans Bold"
+
+tileRefreshTime: 15 # seconds
+
+# see https://openweathermap.org/appid to obtain an API key
+openWeatherAPIKey: "12345123451234512345"
+# see http://bulk.openweathermap.org/sample/city.list.json.gz to obtain your city ID
+openWeatherCityID: "4386802" # Florissant MO, USA
+openWeatherUpdateInterval: 600 # seconds
+
