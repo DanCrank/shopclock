@@ -18,15 +18,18 @@ nextTileImage = None
 
 for tile in cfg["tiles"]:
     if tile["type"] == "Text":
-        tileSet.append(TextTile(text=tile["text"],
-                                textColor=tile["textColor"],
-                                backgroundColor=tile["backgroundColor"]))
+        tileSet.append(TextTile(text=tile.get("text") or None,
+                                textColor=tile.get("textColor") or None,
+                                backgroundColor=tile.get("backgroundColor") or None,
+                                backgroundImage=tile.get("backgroundImage") or None))
     elif tile["type"] == "CPUTemperature":
-        tileSet.append(CPUTemperatureTile(textColor=tile["textColor"],
-                                          backgroundColor=tile["backgroundColor"]))
+        tileSet.append(CPUTemperatureTile(textColor=tile.get("textColor") or None,
+                                          backgroundColor=tile.get("backgroundColor") or None,
+                                          backgroundImage=tile.get("backgroundImage") or None))
     elif tile["type"] == "WeatherCurrent":
-        tileSet.append(WeatherCurrentTile(textColor=tile["textColor"],
-                                          backgroundColor=tile["backgroundColor"]))
+        tileSet.append(WeatherCurrentTile(textColor=tile.get("textColor") or None,
+                                          backgroundColor=tile.get("backgroundColor") or None,
+                                          backgroundImage=tile.get("backgroundImage") or None))
     else:
         print("Unrecognized tile type " + tile["type"] + ", skipping.")
 
@@ -108,6 +111,7 @@ def rotateTiles():
         tileBox.image = image
         app.update()
     # update the tile references
+    lastTileImage.close()
     lastTileImage = mainTileImage
     mainTileImage = nextTileImage
     nextTileImage = onDeckTileImage
@@ -119,35 +123,34 @@ def rotateTiles():
 app = App(title="shopclock", bg=cfg["backgroundColor"], layout="auto")
 
 # TOP BAND SETUP
-topBand = Box(app,
-              width=cfg["screenWidth"],
-              height=cfg["topBandHeight"],
-              layout="auto",
-              align="top")
-
-timeDisplay = Text(topBand,
-                   size=18,
-                   color=cfg["timeDateColor"],
-                   bg=cfg["timeDateBackgroundColor"],
-                   font=cfg["timeDateFont"],
-                   align="left",
-                   text="timeGoesHere",
-                   width="fill",
-                   height="fill")
-updateTime()
-timeDisplay.repeat(200, updateTime)
-
-dateDisplay = Text(topBand,
-                   size=18,
-                   color=cfg["timeDateColor"],
-                   bg=cfg["timeDateBackgroundColor"],
-                   font=cfg["timeDateFont"],
-                   align="right",
-                   text="dateGoesHere",
-                   width="fill",
-                   height="fill")
-updateDate()
-dateDisplay.repeat(10000, updateDate)
+if cfg["topBandHeight"] > 0:
+    topBand = Box(app,
+                  width=cfg["screenWidth"],
+                  height=cfg["topBandHeight"],
+                  layout="auto",
+                  align="top")
+    timeDisplay = Text(topBand,
+                       size=18,
+                       color=cfg["timeDateColor"],
+                       bg=cfg["timeDateBackgroundColor"],
+                       font=cfg["timeDateFont"],
+                       align="left",
+                       text="timeGoesHere",
+                       width="fill",
+                       height="fill")
+    updateTime()
+    timeDisplay.repeat(200, updateTime)
+    dateDisplay = Text(topBand,
+                       size=18,
+                       color=cfg["timeDateColor"],
+                       bg=cfg["timeDateBackgroundColor"],
+                       font=cfg["timeDateFont"],
+                       align="right",
+                       text="dateGoesHere",
+                       width="fill",
+                       height="fill")
+    updateDate()
+    dateDisplay.repeat(10000, updateDate)
 
 # TILE AREA SETUP
 tileBox = Picture(app,
