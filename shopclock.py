@@ -36,11 +36,15 @@ def updateTime():
 def updateDate():
     dateDisplay.value = time.strftime(cfg["dateFormat"])
 
-def renderTiles():
+def createTiles():
     global tileBox, currentLastTileIndex, lastTileImage, mainTileImage, nextTileImage
     lastTileImage = tileSet[currentLastTileIndex].render()
     mainTileImage = tileSet[(currentLastTileIndex + 1) % len(tileSet)].render()
     nextTileImage = tileSet[(currentLastTileIndex + 2) % len(tileSet)].render()
+    renderTiles()
+
+def renderTiles():
+    global tileBox, currentLastTileIndex, lastTileImage, mainTileImage, nextTileImage
     image = Image.new("RGB",
                       (cfg["screenWidth"],
                        cfg["tileSizeLarge"]),
@@ -80,25 +84,25 @@ def rotateTiles():
                           (cfg["screenWidth"],
                            cfg["tileSizeLarge"]),
                           color=cfg["backgroundColor"])
-        if lastTileSize > 0:
+        if int(lastTileSize) > 0:
             image.paste(lastTileImage.resize((int(lastTileSize),
                                               int(lastTileSize)),
-                                             resample=configuration.resizeFilter),
+                                             resample=configuration.resizeFilterFast),
                         (0,
                          int((cfg["tileSizeLarge"] / 2) - (lastTileSize / 2))))
         image.paste(mainTileImage.resize((int(mainTileSize),
                                           int(mainTileSize)),
-                                         resample=configuration.resizeFilter),
+                                         resample=configuration.resizeFilterFast),
                     (int(lastTileSize),
                      int((cfg["tileSizeLarge"] / 2) - (mainTileSize / 2))))
         image.paste(nextTileImage.resize((int(nextTileSize),
                                           int(nextTileSize)),
-                                         resample=configuration.resizeFilter),
+                                         resample=configuration.resizeFilterFast),
                     (int(lastTileSize + mainTileSize),
                      int((cfg["tileSizeLarge"] / 2) - (nextTileSize / 2))))
         image.paste(onDeckTileImage.resize((int(onDeckTileSize),
                                             int(onDeckTileSize)),
-                                           resample=configuration.resizeFilter),
+                                           resample=configuration.resizeFilterFast),
                     (int(lastTileSize + mainTileSize + nextTileSize),
                      int((cfg["tileSizeLarge"] / 2) - (onDeckTileSize / 2))))
         tileBox.image = image
@@ -107,8 +111,10 @@ def rotateTiles():
     lastTileImage = mainTileImage
     mainTileImage = nextTileImage
     nextTileImage = onDeckTileImage
-    # finally, update the tile index
+    # update the tile index
     currentLastTileIndex = (currentLastTileIndex + 1) % len(tileSet)
+    # render one last time so the non-animated image has the good resampling filter
+    renderTiles()
 
 app = App(title="shopclock", bg=cfg["backgroundColor"], layout="auto")
 
@@ -149,7 +155,7 @@ tileBox = Picture(app,
                   height=cfg["tileSizeLarge"],
                   align="top")
 currentLastTileIndex = 0
-renderTiles()
+createTiles()
 app.repeat(cfg["tileRefreshTime"] * 1000, rotateTiles)
 
 # BOTTOM BAND SETUP

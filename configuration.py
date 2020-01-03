@@ -5,4 +5,5 @@ from PIL import Image
 
 cfg = yaml.safe_load(open("shopclock-config.yaml"))
 
-resizeFilter = Image.BILINEAR
+resizeFilter = Image.BICUBIC
+resizeFilterFast = Image.NEAREST

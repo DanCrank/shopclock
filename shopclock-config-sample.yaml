@@ -13,7 +13,7 @@ topBandHeight: 30
 bottomBandHeight: 0
 tileSizeSmall: 175
 tileSizeLarge: 450
-animationSteps: 12
+animationSteps: 24
 
 tileRefreshTime: 15 # seconds
 
