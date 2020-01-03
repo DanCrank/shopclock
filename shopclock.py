@@ -1,18 +1,34 @@
 #!/usr/bin/python3
 
 import time
-import yaml
-from guizero import App, Box, Text
+from guizero import App, Box, Text, Picture
+from PIL import Image
 from tiles import TextTile, CPUTemperatureTile, WeatherCurrentTile
+import configuration
 
-cfg = yaml.safe_load(open("shopclock-config.yaml"))
+# TODO: eliminate globals
+
+cfg = configuration.cfg
 
 tileSet = []
-tileSet.append(WeatherCurrentTile(cfg, textColor = "blue", backgroundColor = "white"))
-tileSet.append(CPUTemperatureTile(textColor = "blue", backgroundColor = "white"))
-tileSet.append(TextTile(text = "RED", backgroundColor = "#800000"))
-tileSet.append(TextTile(text = "BLUE", backgroundColor = "#000080"))
-#tileSet.append(TextTile(text = "GREEN", backgroundColor = "#008000"))
+
+lastTileImage = None
+mainTileImage = None
+nextTileImage = None
+
+for tile in cfg["tiles"]:
+    if tile["type"] == "Text":
+        tileSet.append(TextTile(text=tile["text"],
+                                textColor=tile["textColor"],
+                                backgroundColor=tile["backgroundColor"]))
+    elif tile["type"] == "CPUTemperature":
+        tileSet.append(CPUTemperatureTile(textColor=tile["textColor"],
+                                          backgroundColor=tile["backgroundColor"]))
+    elif tile["type"] == "WeatherCurrent":
+        tileSet.append(WeatherCurrentTile(textColor=tile["textColor"],
+                                          backgroundColor=tile["backgroundColor"]))
+    else:
+        print("Unrecognized tile type " + tile["type"] + ", skipping.")
 
 def updateTime():
     timeDisplay.value = time.strftime(cfg["timeFormat"])
@@ -20,94 +36,129 @@ def updateTime():
 def updateDate():
     dateDisplay.value = time.strftime(cfg["dateFormat"])
 
-def createTileAreas():
-    global lastTileArea, mainTileArea, nextTileArea
-    lastTileArea = Box(app,
-                       grid = [0,2],
-                       width = 180,
-                       height = 180,
-                       layout = "auto",
-                       align = "left")
-    mainTileArea = Box(app,
-                       grid = [1,1,1,3],
-                       width = 440,
-                       height = 440,
-                       layout = "auto")
-    nextTileArea = Box(app,
-                       grid = [2,2],
-                       width = 180,
-                       height = 180,
-                       layout = "auto",
-                       align = "right")
-
-def destroyTileAreas():
-    global lastTileArea, mainTileArea, nextTileArea
-    if lastTileArea is not None: lastTileArea.destroy()
-    if mainTileArea is not None: mainTileArea.destroy()
-    if nextTileArea is not None: nextTileArea.destroy()
+def renderTiles():
+    global tileBox, currentLastTileIndex, lastTileImage, mainTileImage, nextTileImage
+    lastTileImage = tileSet[currentLastTileIndex].render()
+    mainTileImage = tileSet[(currentLastTileIndex + 1) % len(tileSet)].render()
+    nextTileImage = tileSet[(currentLastTileIndex + 2) % len(tileSet)].render()
+    image = Image.new("RGB",
+                      (cfg["screenWidth"],
+                       cfg["tileSizeLarge"]),
+                      color=cfg["backgroundColor"])
+    image.paste(lastTileImage.resize((cfg["tileSizeSmall"],
+                                      cfg["tileSizeSmall"]),
+                                     resample=configuration.resizeFilter),
+                (0,
+                 int((cfg["tileSizeLarge"] / 2) - (cfg["tileSizeSmall"] / 2))))
+    image.paste(mainTileImage,
+                (cfg["tileSizeSmall"],
+                 0))
+    image.paste(nextTileImage.resize((cfg["tileSizeSmall"],
+                                      cfg["tileSizeSmall"]),
+                                     resample=configuration.resizeFilter),
+                (cfg["tileSizeSmall"] + cfg["tileSizeLarge"],
+                 int((cfg["tileSizeLarge"] / 2) - (cfg["tileSizeSmall"] / 2))))
+    tileBox.image = image
+    app.update()
 
 def rotateTiles():
-    global currentLastTile, tileSet
-    currentLastTile = currentLastTile + 1
-    if (currentLastTile >= len(tileSet)):
-        currentLastTile = 0
-    renderTiles()
+    global tileBox, currentLastTileIndex, lastTileImage, mainTileImage, nextTileImage
+    # animate the transition
+    onDeckTileImage = tileSet[(currentLastTileIndex + 3) % len(tileSet)].render()
+    lastTileSize = float(cfg["tileSizeSmall"])
+    mainTileSize = float(cfg["tileSizeLarge"])
+    nextTileSize = float(cfg["tileSizeSmall"])
+    onDeckTileSize = 0.0
+    stepSizeSmall = cfg["tileSizeSmall"] / cfg["animationSteps"]
+    stepSizeLarge = (cfg["tileSizeLarge"] - cfg["tileSizeSmall"]) / cfg["animationSteps"]
+    for i in range(cfg["animationSteps"]):
+        lastTileSize -= stepSizeSmall
+        mainTileSize -= stepSizeLarge
+        nextTileSize += stepSizeLarge
+        onDeckTileSize += stepSizeSmall
+        image = Image.new("RGB",
+                          (cfg["screenWidth"],
+                           cfg["tileSizeLarge"]),
+                          color=cfg["backgroundColor"])
+        if lastTileSize > 0:
+            image.paste(lastTileImage.resize((int(lastTileSize),
+                                              int(lastTileSize)),
+                                             resample=configuration.resizeFilter),
+                        (0,
+                         int((cfg["tileSizeLarge"] / 2) - (lastTileSize / 2))))
+        image.paste(mainTileImage.resize((int(mainTileSize),
+                                          int(mainTileSize)),
+                                         resample=configuration.resizeFilter),
+                    (int(lastTileSize),
+                     int((cfg["tileSizeLarge"] / 2) - (mainTileSize / 2))))
+        image.paste(nextTileImage.resize((int(nextTileSize),
+                                          int(nextTileSize)),
+                                         resample=configuration.resizeFilter),
+                    (int(lastTileSize + mainTileSize),
+                     int((cfg["tileSizeLarge"] / 2) - (nextTileSize / 2))))
+        image.paste(onDeckTileImage.resize((int(onDeckTileSize),
+                                            int(onDeckTileSize)),
+                                           resample=configuration.resizeFilter),
+                    (int(lastTileSize + mainTileSize + nextTileSize),
+                     int((cfg["tileSizeLarge"] / 2) - (onDeckTileSize / 2))))
+        tileBox.image = image
+        app.update()
+    # update the tile references
+    lastTileImage = mainTileImage
+    mainTileImage = nextTileImage
+    nextTileImage = onDeckTileImage
+    # finally, update the tile index
+    currentLastTileIndex = (currentLastTileIndex + 1) % len(tileSet)
 
-def renderTiles():
-    global currentLastTile, tileSet
-    destroyTileAreas()
-    createTileAreas()
-    tileSet[currentLastTile].renderSmall(lastTileArea)
-    tileSet[(currentLastTile + 1) % len(tileSet)].renderLarge(mainTileArea)
-    tileSet[(currentLastTile + 2) % len(tileSet)].renderSmall(nextTileArea)
- 
-app = App(title="shopclock", bg = cfg["backgroundColor"], layout = "grid")
+app = App(title="shopclock", bg=cfg["backgroundColor"], layout="auto")
 
 # TOP BAND SETUP
 topBand = Box(app,
-              grid = [0,0,3,1],
-              width = 800,
-              height = 40,
-              layout = "auto")
+              width=cfg["screenWidth"],
+              height=cfg["topBandHeight"],
+              layout="auto",
+              align="top")
 
 timeDisplay = Text(topBand,
-                   size = 18,
-                   color = cfg["timeDateColor"],
-                   bg = cfg["timeDateBackgroundColor"],
-                   font = cfg["timeDateFont"],
-                   align = "left",
-                   text = "timeGoesHere",
-                   width = "fill",
-                   height = "fill")
+                   size=18,
+                   color=cfg["timeDateColor"],
+                   bg=cfg["timeDateBackgroundColor"],
+                   font=cfg["timeDateFont"],
+                   align="left",
+                   text="timeGoesHere",
+                   width="fill",
+                   height="fill")
 updateTime()
 timeDisplay.repeat(200, updateTime)
 
 dateDisplay = Text(topBand,
-                   size = 18,
-                   color = cfg["timeDateColor"],
-                   bg = cfg["timeDateBackgroundColor"],
-                   font = cfg["timeDateFont"],
-                   align = "right",
-                   text = "dateGoesHere",
-                   width = "fill",
-                   height = "fill")
+                   size=18,
+                   color=cfg["timeDateColor"],
+                   bg=cfg["timeDateBackgroundColor"],
+                   font=cfg["timeDateFont"],
+                   align="right",
+                   text="dateGoesHere",
+                   width="fill",
+                   height="fill")
 updateDate()
 dateDisplay.repeat(10000, updateDate)
 
 # TILE AREA SETUP
-lastTileArea = None
-mainTileArea = None
-nextTileArea = None
-currentLastTile = 0
+tileBox = Picture(app,
+                  width=cfg["screenWidth"],
+                  height=cfg["tileSizeLarge"],
+                  align="top")
+currentLastTileIndex = 0
 renderTiles()
 app.repeat(cfg["tileRefreshTime"] * 1000, rotateTiles)
 
 # BOTTOM BAND SETUP
-topBand = Box(app,
-              grid = [0,4,3,1],
-              width = 800,
-              height = 40,
-              layout = "auto")
+if cfg["bottomBandHeight"] > 0:
+    bottomBand = Box(app,
+                     width=cfg["screenWidth"],
+                     height=cfg["bottomBandHeight"],
+                     layout="auto",
+                     align="bottom")
 
 # APP DISPLAY
 app.set_full_screen()
