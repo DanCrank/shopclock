@@ -7,11 +7,34 @@ timeDateColor: "yellow"
 timeDateBackgroundColor: "black"
 timeDateFont: "Sans Bold"
 
+screenWidth: 800
+screenHeight: 480
+topBandHeight: 30
+bottomBandHeight: 0
+tileSizeSmall: 175
+tileSizeLarge: 450
+animationSteps: 12
+
 tileRefreshTime: 15 # seconds
 
+tiles:
+-
+  type: CPUTemperature
+  textColor: blue
+  backgroundColor: white
+-
+  type: WeatherCurrent
+  textColor: "#000060"
+  backgroundColor: "#CCCCFF"
+-
+  type: Text
+  text: "BLUE"
+  textColor: white
+  backgroundColor: "#000080"
+
 # see https://openweathermap.org/appid to obtain an API key
-openWeatherAPIKey: "12345123451234512345"
+openWeatherAPIKey: "12345123451234512345123451234512"
 # see http://bulk.openweathermap.org/sample/city.list.json.gz to obtain your city ID
-openWeatherCityID: "4386802" # Florissant MO, USA
+openWeatherCityID: "5128638" # New York, NY, USA
 openWeatherUpdateInterval: 600 # seconds
 
