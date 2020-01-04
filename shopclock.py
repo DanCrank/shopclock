@@ -3,7 +3,7 @@
 import time
 from guizero import App, Box, Text, Picture
 from PIL import Image
-from tiles import TextTile, CPUTemperatureTile, WeatherCurrentTile
+from tiles import TextTile, CPUTemperatureTile, WeatherCurrentTile, WeatherForecastTile
 import configuration
 
 # TODO: eliminate globals
@@ -30,6 +30,10 @@ for tile in cfg["tiles"]:
         tileSet.append(WeatherCurrentTile(textColor=tile.get("textColor") or None,
                                           backgroundColor=tile.get("backgroundColor") or None,
                                           backgroundImage=tile.get("backgroundImage") or None))
+    elif tile["type"] == "WeatherForecast":
+        tileSet.append(WeatherForecastTile(textColor=tile.get("textColor") or None,
+                                           backgroundColor=tile.get("backgroundColor") or None,
+                                           backgroundImage=tile.get("backgroundImage") or None))
     else:
         print("Unrecognized tile type " + tile["type"] + ", skipping.")
 
