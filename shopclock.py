@@ -3,7 +3,8 @@
 import time
 from guizero import App, Box, Text, Picture
 from PIL import Image
-from tiles import TextTile, CPUTemperatureTile, WeatherCurrentTile, WeatherForecastTile
+from tiles import TextTile, CPUTemperatureTile
+from weathertiles import WeatherCurrentTile, WeatherForecastTile
 import configuration
 
 # TODO: eliminate globals

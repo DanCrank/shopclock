@@ -2,7 +2,7 @@
 timeFormat: "%I:%M:%S %p"
 dateFormat: "%A %B %d %Y"
 
-backgroundColor: "#555599"
+backgroundColor: "#222255"
 timeDateColor: "yellow"
 timeDateBackgroundColor: "black"
 timeDateFont: "Sans Bold"
@@ -13,24 +13,29 @@ topBandHeight: 30
 bottomBandHeight: 0
 tileSizeSmall: 175
 tileSizeLarge: 450
+defaultIconSize: 175
 animationSteps: 24
 
 tileRefreshTime: 15 # seconds
 
 tiles:
 -
-  type: CPUTemperature
-  textColor: blue
-  backgroundColor: white
--
   type: WeatherCurrent
   textColor: "#000060"
   backgroundColor: "#CCCCFF"
 -
-  type: Text
-  text: "BLUE"
-  textColor: white
-  backgroundColor: "#000080"
+  type: WeatherForecast
+  textColor: "white"
+  backgroundColor: "black"
+-
+  type: CPUTemperature
+  textColor: blue
+  backgroundColor: white
+#-
+#  type: Text
+#  text: "BLUE"
+#  textColor: white
+#  backgroundColor: "#000080"
 
 # see https://openweathermap.org/appid to obtain an API key
 openWeatherAPIKey: "12345123451234512345123451234512"
