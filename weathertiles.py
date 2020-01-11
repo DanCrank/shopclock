@@ -3,27 +3,25 @@ import time
 from datetime import date, datetime, timedelta
 import json
 from threading import Timer
-from PIL import Image, ImageDraw, ImageFont
+import pygame
 import requests
-from tiles import getFont, newTileImage
 import configuration
+from tiles import Tile
+from utils import getFont, placeTile, tupleColor, getCPUTemp, RepeatTimer
 
 cfg = configuration.cfg
 
-# thanks, StackOverflow!
-class RepeatTimer(Timer):
-    def run(self):
-        while not self.finished.wait(self.interval):
-            self.function(*self.args, **self.kwargs)
 
 def bearingToDir(bearing):
     directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
                   "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW", "N"]
     return directions[int((bearing + 11.25) / 22.5)]
 
+
 def forceDayIcon(iconName):
-    # force the character before the "@" to be a "d"
-    return iconName[0:iconName.index("@") - 1] + "d" + iconName[iconName.index("@"):]
+    # force last character to be a "d"
+    return iconName[0:len(iconName) - 1] + "d"
+
 
 def analyzeConditions(forecast, tonight):
     # in the context of this method, "forecast" is the dict for a single day's forecast
@@ -42,8 +40,8 @@ def analyzeConditions(forecast, tonight):
     conditionCount = 0
     for i in range(len(conditions)):
         condition = conditions[i]
-        if ((conditions.count(condition) > conditionCount) and \
-            ((precip == False) or (condition <= 699))):
+        if ((conditions.count(condition) > conditionCount) and
+                ((precip == False) or (condition <= 699))):
             forecast["condition"] = condition
             iconName = forecast.get("icons")[i]
             # force a daytime icon unless we're specifically looking at the "tonight" forecast
@@ -53,19 +51,25 @@ def analyzeConditions(forecast, tonight):
             forecast["conditionName"] = forecast.get("conditionNames")[i]
             conditionCount = conditions.count(condition)
 
-class WeatherCurrentTile:
-    def __init__(self,
-                 textColor="white",
-                 backgroundColor="black",
-                 backgroundImage=None,
-                 font="Ubuntu-Regular",
-                 fontSize=36):
-        self.textColor = textColor
-        self.backgroundColor = backgroundColor
-        self.backgroundImage = backgroundImage
-        self.fontName = font
-        self.fontSize = fontSize
-        self.font = getFont(font, fontSize)
+
+class WeatherTile(Tile):
+    def __init__(self, tile):
+        super().__init__(tile)
+        self.iconSize = tile.get("iconSize") or 75
+        self.icons = {}
+
+    def getIcon(self, name):
+        if name in self.icons:
+            return self.icons.get(name)
+        icon = pygame.transform.smoothscale(pygame.image.load("images/openweather/" + name + "@2x.png").convert_alpha(),
+                                            (self.iconSize, self.iconSize))
+        self.icons[name] = icon
+        return icon
+
+
+class WeatherCurrentTile(WeatherTile):
+    def __init__(self, tile):
+        super().__init__(tile)
         # initialize data fields in case the first call to the service
         # fails and they don't get filled in
         self.tempF = 0.0
@@ -99,70 +103,59 @@ class WeatherCurrentTile:
             self.windSpeed = self.weather["wind"]["speed"]
             self.windDirection = bearingToDir(self.weather["wind"]["deg"])
             self.condition = self.weather["weather"][0]["main"]
-            self.icon = "images/openweather/" + \
-                        self.weather["weather"][0]["icon"] + \
-                        "@2x.png"
+            self.icon = self.weather["weather"][0]["icon"]
+            self.locale = self.weather["name"]
             self.serviceError = False
 
     def render(self):
-        margin = 10 # padding at top and bottom of tile
-        tileSize = cfg["tileSizeLarge"]
-        image, draw = newTileImage(self.backgroundColor, self.backgroundImage)
+        image = super().render()
+        margin = 10  # padding at top and bottom of tile
+        width, height = image.get_size()
         # top text
-        text = "Current Weather"
-        topSize = draw.textsize(text, font=self.font)
-        draw.text(((tileSize / 2) - (topSize[0] / 2),
-                   margin),
-                  text,
-                  font=self.font,
-                  fill=self.textColor)
+        topTextImage = super().renderText("%s Weather" % self.locale)
+        topWidth, topHeight = topTextImage.get_size()
+        image.blit(topTextImage, (int((width / 2) - (topWidth / 2)),
+                                  margin))
         # bottom text
-        text = ("%.0f F and %s\nHumidity: %.0f%%\n"
-                "Feels like: %.0f F\nWind: %s at %.0f mph") % \
-               (self.tempF,
-                self.condition,
-                self.humidity,
-                self.feelsLike,
-                self.windDirection,
-                self.windSpeed)
-        bottomSize = draw.textsize(text, font=self.font)
-        draw.text(((tileSize / 2) - (bottomSize[0] / 2),
-                   (tileSize - bottomSize[1] - margin)),
-                  text,
-                  font=self.font,
-                  fill=self.textColor)
+        bottomText = ("%.0f F and %s\nHumidity: %.0f%%\n"
+                      "Feels like: %.0f F\nWind: %s at %.0f mph") % \
+            (self.tempF,
+             self.condition,
+             self.humidity,
+             self.feelsLike,
+             self.windDirection,
+             self.windSpeed)
+        bottomTextImage = super().renderText(bottomText)
+        bottomWidth, bottomHeight = bottomTextImage.get_size()
+        image.blit(bottomTextImage, (int((width / 2) - (bottomWidth / 2)),
+                                     int((height - bottomHeight - margin))))
         # icon
         if self.icon is not None:
-            iconSize = cfg["defaultIconSize"]
             # draw a blue circle behind the icon
             # for X, just center horizontally
-            iconX = int((tileSize / 2) - iconSize / 2)
+            iconX = int((width / 2) - self.iconSize / 2)
             # for Y, first calculate the empty space between the text blocks
-            emptyY = tileSize - topSize[1] - bottomSize[1] - (2 * margin)
+            emptyY = height - topHeight - bottomHeight - (2 * margin)
             # then the Y coord is margin + top text size + half the empty space - half the icon size
-            iconY = int(margin + topSize[1] + (emptyY / 2) - (iconSize / 2))
-            draw.ellipse([iconX, iconY, iconX + iconSize, iconY + iconSize], fill="#B0B0FF")
-            with Image.open(self.icon).resize((iconSize, iconSize),
-                                              resample=configuration.resizeFilter) \
-                    as icon:
-                image.paste(icon, (iconX, iconY), mask=icon)
+            iconY = int(margin + topHeight + (emptyY / 2) - (self.iconSize / 2))
+            pygame.draw.ellipse(image,
+                                tupleColor("#B0B0FF"),
+                                pygame.Rect(iconX,
+                                            iconY,
+                                            self.iconSize,
+                                            self.iconSize))
+            image.blit(self.getIcon(self.icon), (iconX, iconY))
         # error indicator
         if self.serviceError:
-            draw.text((0, 0), "X", font=self.font, fill="red")
+            errorIndicator = super().renderText("X", color=tupleColor("#FF0000"))
+            image.blit(errorIndicator, (0, 0))
         return image
 
-class WeatherForecastTile:
-    def __init__(self,
-                 textColor="white",
-                 backgroundColor="black",
-                 backgroundImage=None,
-                 font="Ubuntu-Regular"):
-        self.textColor = textColor
-        self.backgroundColor = backgroundColor
-        self.backgroundImage = backgroundImage
-        self.fontName = font
-        self.fontLarge = getFont(font, 36)
-        self.fontSmall = getFont(font, 18)
+
+class WeatherForecastTile(WeatherTile):
+    def __init__(self, tile):
+        super().__init__(tile)
+        self.fontSmall = getFont(self.fontName, 18)
         self.forecast = [{}, {}, {}, {}, {}, {}]
         self.serviceError = False
         self.updateWeatherForecast()
@@ -220,21 +213,19 @@ class WeatherForecastTile:
                     tonight = False
                 analyzeConditions(forecast[day], tonight)
             self.forecast = forecast
+            self.locale = self.weather.get("city").get("name")
             self.serviceError = False
 
     def render(self):
-        margin = 10 # padding at top and bottom of tile and between columns
-        tileSize = cfg["tileSizeLarge"]
-        image, draw = newTileImage(self.backgroundColor, self.backgroundImage)
+        image = super().render()
+        margin = 10  # padding at top and bottom of tile and between columns
+        width, height = image.get_size()
 
         # top text
-        text = "Weather Forecast"
-        topSize = draw.textsize(text, font=self.fontLarge)
-        draw.text(((tileSize / 2) - (topSize[0] / 2),
-                   margin),
-                  text,
-                  font=self.fontLarge,
-                  fill=self.textColor)
+        topTextImage = super().renderText("%s Forecast" % self.locale)
+        topWidth, topHeight = topTextImage.get_size()
+        image.blit(topTextImage, (int((width / 2) - (topWidth / 2)),
+                                  margin))
 
         # weirdness: the forecast includes "today" if called in the morning
         # but starts with "tomorrow" if called in the evening. we coped with
@@ -246,13 +237,12 @@ class WeatherForecastTile:
             offset = 0
 
         # build a list of forecast strings so we can size them and center vertically
-        forecastStrings, maxHeight = self.buildForecastStrings(draw, offset)
+        forecastStrings, maxHeight = self.buildForecastStrings(offset)
 
         # current arrangement is a row of 3 and then a row of 2
-        iconSize = 75
-        topRowY = int(topSize[1] + 2 * margin)
-        bottomRowY = int(((cfg["tileSizeLarge"] - topRowY) / 2) + topRowY)
-        columnWidth = cfg["tileSizeLarge"] / 3
+        topRowY = int(topHeight + 2 * margin)
+        bottomRowY = int(((height - topRowY) / 2) + topRowY)
+        columnWidth = width / 3
         x = []
         y = []
         # x values for top row
@@ -266,38 +256,35 @@ class WeatherForecastTile:
         y.append(bottomRowY)
 
         # start slapping them up there
-        iconOffset = int((columnWidth - iconSize) / 2) # this is an X offset only
+        iconOffset = int((columnWidth - self.iconSize) / 2)  # this is an X offset only
         for day in range(5):
-            draw.ellipse([x[day] + iconOffset,
-                          y[day],
-                          x[day] + iconOffset + iconSize,
-                          y[day] + iconSize],
-                         fill="#B0B0FF")
+            pygame.draw.ellipse(image,
+                                tupleColor("#B0B0FF"),
+                                pygame.Rect(x[day] + iconOffset,
+                                            y[day],
+                                            self.iconSize,
+                                            self.iconSize))
             # have to apply offset to icon lookup since it's looking back to the "old" array
-            iconName = self.forecast[day + offset]["icon"]
-            with Image.open(iconName).resize((iconSize, iconSize),
-                                             resample=configuration.resizeFilter) \
-                    as icon:
-                image.paste(icon, (x[day] + iconOffset, y[day]), mask=icon)
-            draw.text((x[day], int(y[day] + iconSize + (margin / 2))),
-                      forecastStrings[day],
-                      font=self.fontSmall,
-                      fill=self.textColor)
+            image.blit(self.getIcon(self.forecast[day + offset]["icon"]),
+                       (x[day] + iconOffset, y[day]))
+            forecastTextImage = super().renderText(forecastStrings[day], font=self.fontSmall)
+            image.blit(forecastTextImage, (x[day], int(y[day] + self.iconSize + (margin / 2))))
         # error indicator
         if self.serviceError:
-            draw.text((0, 0), "X", font=self.font, fill="red")
+            errorIndicator = super().renderText("X", color=tupleColor("#FF0000"))
+            image.blit(errorIndicator, (0, 0))
         return image
 
     def collectDatum(self, forecast, datum):
         # in the context of this method, "forecast" is the dict for a single day's forecast
         # handle temperature
-        temp = datum.get("main").get("temp") # float, F
+        temp = datum.get("main").get("temp")  # float, F
         if "highTemp" not in forecast or temp > forecast.get("highTemp"):
             forecast["highTemp"] = temp
         if "lowTemp" not in forecast or temp < forecast.get("lowTemp"):
             forecast["lowTemp"] = temp
         # handle wind speed
-        wind = datum.get("wind").get("speed") # float, mph
+        wind = datum.get("wind").get("speed")  # float, mph
         if "highWind" not in forecast or wind > forecast.get("highWind"):
             forecast["highWind"] = wind
         if "lowWind" not in forecast or wind < forecast.get("lowWind"):
@@ -309,12 +296,10 @@ class WeatherForecastTile:
             forecast["icons"] = []
             forecast["conditionNames"] = []
         forecast["conditions"].append(datum.get("weather")[0].get("id"))
-        forecast["icons"].append("images/openweather/" + \
-                                 datum.get("weather")[0].get("icon") + \
-                                 "@2x.png")
+        forecast["icons"].append(datum.get("weather")[0].get("icon"))
         forecast["conditionNames"].append(datum.get("weather")[0].get("main"))
 
-    def buildForecastStrings(self, draw, offset):
+    def buildForecastStrings(self, offset):
         # build a list of forecast strings so we can size them and center vertically
         forecastStrings = []
         maxHeight = 0
@@ -329,7 +314,7 @@ class WeatherForecastTile:
                 dayName = "Tomorrow"
             else:
                 dayName = (self.forecastDay + timedelta(days=day)).strftime("%A")
-            forecastString = ("%s:\nHigh: %.0f F\nLow: %.0f F\nWind: %.0f-%.0f mph\n%s" % \
+            forecastString = ("%s:\nHigh: %.0f F\nLow: %.0f F\nWind: %.0f-%.0f mph\n%s" %
                               (dayName,
                                self.forecast[day]["highTemp"],
                                self.forecast[day]["lowTemp"],
@@ -337,7 +322,7 @@ class WeatherForecastTile:
                                self.forecast[day]["highWind"],
                                self.forecast[day]["conditionName"]))
             forecastStrings.append(forecastString)
-            size = draw.textsize(forecastString, font=self.fontSmall)
-            if size[1] > maxHeight:
-                maxHeight = size[1]
+            width, height = font = self.fontSmall.size(forecastString)
+            if height > maxHeight:
+                maxHeight = height
         return forecastStrings, maxHeight

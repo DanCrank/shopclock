@@ -3,9 +3,9 @@ pid="$(ps -ef | grep shopclock | awk '/python/ {print $2}')"
 if [ -n "$pid" ]; then
   echo "Found running shopclock at PID $pid...killing"
   kill $pid
+  sleep 1
 fi
 export DISPLAY=:0
-./shopclock.py &
+python3 shopclock.py &
 pid="$(ps -ef | grep shopclock | awk '/python/ {print $2}')"
 echo "shopclock running at PID $pid"
-

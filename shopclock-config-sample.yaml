@@ -3,9 +3,9 @@ timeFormat: "%I:%M:%S %p"
 dateFormat: "%A %B %d %Y"
 
 backgroundColor: "#222255"
-timeDateColor: "yellow"
-timeDateBackgroundColor: "black"
-timeDateFont: "Sans Bold"
+timeDateColor: "#FFFF00"
+timeDateBackgroundColor: "#000000"
+timeDateFont: "Ubuntu-Regular"
 
 screenWidth: 800
 screenHeight: 480
@@ -21,25 +21,45 @@ tileRefreshTime: 15 # seconds
 tiles:
 -
   type: WeatherCurrent
-  textColor: "#000060"
-  backgroundColor: "#CCCCFF"
+  textColor: "#000000"
+  backgroundImage: "blue-sky.jpg"
+  iconSize: 175
 -
   type: WeatherForecast
-  textColor: "white"
-  backgroundColor: "black"
+  textColor: "#FFFFFF"
+  backgroundColor: "#000000"
+  iconSize: 75
 -
-  type: CPUTemperature
-  textColor: blue
-  backgroundColor: white
+  type: RandomTweet # news
+  title: "News"
+  textColor: "#000000"
+  backgroundColor: "#FFFFFF"
+  freshness: 10
+  fontSize: 24
+  searches:
+  - "@AP"
+  - "@washingtonpost"
+  - "@Reuters"
+  - "@BBCWorld"
+#-
+#  type: CPUTemperature
+#  textColor: blue
+#  backgroundColor: white
 #-
 #  type: Text
 #  text: "BLUE"
 #  textColor: white
 #  backgroundColor: "#000080"
 
+# OpenWeatherMap
 # see https://openweathermap.org/appid to obtain an API key
 openWeatherAPIKey: "12345123451234512345123451234512"
 # see http://bulk.openweathermap.org/sample/city.list.json.gz to obtain your city ID
 openWeatherCityID: "5128638" # New York, NY, USA
 openWeatherUpdateInterval: 600 # seconds
 
+# Tweepy (Twitter)
+# see https://developer.twitter.com/ to obtain an API key
+twitterAPIKey: "abcdeabcdeabcdeabcdeabcde"
+twitterAPISecretKey: "abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde"
+twitterUpdateInterval: 60 # seconds
