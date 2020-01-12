@@ -2,7 +2,7 @@ from threading import Timer
 import logging
 import pygame
 import configuration
-from utils import getFont, placeTile, tupleColor, getCPUTemp, RepeatTimer
+from utils import getFont, placeTile, tupleColor, getCPUTemp, flattenString, RepeatTimer
 
 cfg = configuration.cfg
 
@@ -33,9 +33,10 @@ class Tile:
     def renderText(self, text, **kwargs):
         font = kwargs.get("font") or self.font
         color = kwargs.get("color") or self.textColor
-        if "\n" in text:
-            return self.renderMultilineText(text.split("\n"), font=font, color=color)
-        return font.render(text, True, color)
+        flattenedText = flattenString(text)
+        if "\n" in flattenedText:
+            return self.renderMultilineText(flattenedText.split("\n"), font=font, color=color)
+        return font.render(flattenedText, True, color)
 
     def renderMultilineText(self, lines, **kwargs):
         font = kwargs.get("font") or self.font
@@ -69,11 +70,13 @@ class Tile:
         lines = []
         done = False
         lastLength = -1
+        logging.info("Wrapping text to %s pixels:\n%s" %
+                     (wrapWidth, text))
         while not done:
             # if lastLength == len(text):
             #    logging.error("Infinite loop!")
             #    return None
-            lastLength = len(text)
+            # lastLength = len(text)
             # if text now starts with one or more hard line breaks,
             # render them by putting a " " in the array for each one
             while text.startswith("\n"):
@@ -83,6 +86,7 @@ class Tile:
             width = 0
             firstSpace = None
             secondSpace = None
+            logging.info("Seeking: %s" % text)
             while width < wrapWidth and not done:
                 # if firstSpace is not None and secondSpace is not None and firstSpace == secondSpace:
                 #    logging.error("Infinite loop!!")
@@ -95,26 +99,50 @@ class Tile:
                 hardLineBreak = text.find("\n")
                 if secondSpace == -1:
                     done = True
-                elif hardLineBreak >= 0 and hardLineBreak < secondSpace:
+                elif hardLineBreak >= 0 and \
+                        firstSpace is not None and \
+                        hardLineBreak > firstSpace and \
+                        hardLineBreak < secondSpace:
                     break
                 else:
+                    logging.info("Sizing: %s" % text[:secondSpace])
                     width, height = font.size(text[:secondSpace])
+                    logging.info("width = %s" % width)
             if done:
+                logging.info("End of line.")
                 lines.append(text.strip(" "))
-            elif hardLineBreak >= 0 and hardLineBreak < secondSpace:
+            elif hardLineBreak >= 0 and \
+                    firstSpace is not None and \
+                    hardLineBreak > firstSpace and \
+                    hardLineBreak < secondSpace:
+                logging.info("Hard line break...")
                 # here if we hit a hard line break before a soft break
-                lines.append(text[:hardLineBreak].strip(" "))
-                text = text[hardLineBreak:].strip(" ")
+                # we still need to check to see whether the line will fit
+                # if we break it at the hard break
+                hbWidth, hbHeight = font.size(text[:hardLineBreak])
+                if hbWidth > wrapWidth:
+                    # nope
+                    logging.info("Broke before hard break.")
+                    lines.append(text[:firstSpace].strip(" "))
+                    text = text[firstSpace:].strip(" ")
+                else:
+                    # yup
+                    logging.info("Broke at hard break.")
+                    lines.append(text[:hardLineBreak].strip(" "))
+                    text = text[hardLineBreak:].strip(" ")
             elif firstSpace is None:
+                logging.info("Word too long!")
                 # here if the first segment is too long to begin with
                 # in that case, just add it as is and let it clip off
                 lines.append(text[:secondSpace].strip(" "))
                 text = text[secondSpace:].strip(" ")
             else:
+                logging.info("Soft line break.")
                 # here if going to the second space would put us over,
                 # so break at the first space
                 lines.append(text[:firstSpace].strip(" "))
                 text = text[firstSpace:].strip(" ")
+            logging.info("Added line: %s" % lines[len(lines) - 1])
         return self.renderMultilineText(lines, font=font, color=color)
 
 

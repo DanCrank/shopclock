@@ -36,6 +36,8 @@ tiles:
   backgroundColor: "#FFFFFF"
   freshness: 10
   fontSize: 24
+  query: "from:%s -filter:retweets -filter:replies -filter:links"
+  resultType: "recent"
   searches:
   - "@AP"
   - "@washingtonpost"
