@@ -2,7 +2,7 @@ import array
 import time
 from datetime import date, datetime, timedelta
 import json
-from threading import Timer
+from threading import Semaphore, Timer
 import pygame
 import requests
 import configuration
@@ -80,11 +80,13 @@ class WeatherCurrentTile(WeatherTile):
         self.condition = "Error"
         self.icon = None
         self.serviceError = False
+        self.renderSemaphore = Semaphore()
         self.updateWeatherCurrent()
         self.timer = RepeatTimer(cfg["openWeatherUpdateInterval"], self.updateWeatherCurrent)
         self.timer.start()
 
     def updateWeatherCurrent(self):
+        self.renderSemaphore.acquire()
         try:
             resp = requests.get("https://api.openweathermap.org/data/2.5/weather?id=" +
                                 cfg["openWeatherCityID"] +
@@ -96,6 +98,7 @@ class WeatherCurrentTile(WeatherTile):
             # on any exception while fetching or parsing data,
             # leave stale data but set a flag to show that it's stale
             self.serviceError = True
+            logging.warning("Exception while running OpenWeather query", exc_info=True)
         else:
             self.tempF = self.weather["main"]["temp"]
             self.feelsLike = self.weather["main"]["feels_like"]
@@ -106,50 +109,56 @@ class WeatherCurrentTile(WeatherTile):
             self.icon = self.weather["weather"][0]["icon"]
             self.locale = self.weather["name"]
             self.serviceError = False
+        finally:
+            self.renderSemaphore.release()
 
     def render(self):
         image = super().render()
         margin = 10  # padding at top and bottom of tile
         width, height = image.get_size()
-        # top text
-        topTextImage = super().renderText("%s Weather" % self.locale)
-        topWidth, topHeight = topTextImage.get_size()
-        image.blit(topTextImage, (int((width / 2) - (topWidth / 2)),
-                                  margin))
-        # bottom text
-        bottomText = ("%.0f F and %s\nHumidity: %.0f%%\n"
-                      "Feels like: %.0f F\nWind: %s at %.0f mph") % \
-            (self.tempF,
-             self.condition,
-             self.humidity,
-             self.feelsLike,
-             self.windDirection,
-             self.windSpeed)
-        bottomTextImage = super().renderText(bottomText)
-        bottomWidth, bottomHeight = bottomTextImage.get_size()
-        image.blit(bottomTextImage, (int((width / 2) - (bottomWidth / 2)),
-                                     int((height - bottomHeight - margin))))
-        # icon
-        if self.icon is not None:
-            # draw a blue circle behind the icon
-            # for X, just center horizontally
-            iconX = int((width / 2) - self.iconSize / 2)
-            # for Y, first calculate the empty space between the text blocks
-            emptyY = height - topHeight - bottomHeight - (2 * margin)
-            # then the Y coord is margin + top text size + half the empty space - half the icon size
-            iconY = int(margin + topHeight + (emptyY / 2) - (self.iconSize / 2))
-            pygame.draw.ellipse(image,
-                                tupleColor("#B0B0FF"),
-                                pygame.Rect(iconX,
-                                            iconY,
-                                            self.iconSize,
-                                            self.iconSize))
-            image.blit(self.getIcon(self.icon), (iconX, iconY))
-        # error indicator
-        if self.serviceError:
-            errorIndicator = super().renderText("X", color=tupleColor("#FF0000"))
-            image.blit(errorIndicator, (0, 0))
-        return image
+        self.renderSemaphore.acquire()
+        try:
+            # top text
+            topTextImage = super().renderText("%s Weather" % self.locale)
+            topWidth, topHeight = topTextImage.get_size()
+            image.blit(topTextImage, (int((width / 2) - (topWidth / 2)),
+                                      margin))
+            # bottom text
+            bottomText = ("%.0f F and %s\nHumidity: %.0f%%\n"
+                          "Feels like: %.0f F\nWind: %s at %.0f mph") % \
+                (self.tempF,
+                 self.condition,
+                 self.humidity,
+                 self.feelsLike,
+                 self.windDirection,
+                 self.windSpeed)
+            bottomTextImage = super().renderText(bottomText)
+            bottomWidth, bottomHeight = bottomTextImage.get_size()
+            image.blit(bottomTextImage, (int((width / 2) - (bottomWidth / 2)),
+                                         int((height - bottomHeight - margin))))
+            # icon
+            if self.icon is not None:
+                # draw a blue circle behind the icon
+                # for X, just center horizontally
+                iconX = int((width / 2) - self.iconSize / 2)
+                # for Y, first calculate the empty space between the text blocks
+                emptyY = height - topHeight - bottomHeight - (2 * margin)
+                # then the Y coord is margin + top text size + half the empty space - half the icon size
+                iconY = int(margin + topHeight + (emptyY / 2) - (self.iconSize / 2))
+                pygame.draw.ellipse(image,
+                                    tupleColor("#B0B0FF"),
+                                    pygame.Rect(iconX,
+                                                iconY,
+                                                self.iconSize,
+                                                self.iconSize))
+                image.blit(self.getIcon(self.icon), (iconX, iconY))
+            # error indicator
+            if self.serviceError:
+                errorIndicator = super().renderText("X", color=tupleColor("#FF0000"))
+                image.blit(errorIndicator, (0, 0))
+            return image
+        finally:
+            self.renderSemaphore.release()
 
 
 class WeatherForecastTile(WeatherTile):
@@ -158,11 +167,13 @@ class WeatherForecastTile(WeatherTile):
         self.fontSmall = getFont(self.fontName, 18)
         self.forecast = [{}, {}, {}, {}, {}, {}]
         self.serviceError = False
+        self.renderSemaphore = Semaphore()
         self.updateWeatherForecast()
         self.timer = RepeatTimer(cfg["openWeatherUpdateInterval"], self.updateWeatherForecast)
         self.timer.start()
 
     def updateWeatherForecast(self):
+        self.renderSemaphore.acquire()
         try:
             resp = requests.get("https://api.openweathermap.org/data/2.5/forecast?id=" +
                                 cfg["openWeatherCityID"] +
@@ -174,6 +185,7 @@ class WeatherForecastTile(WeatherTile):
             # on any exception while fetching or parsing data,
             # leave stale data but set a flag to show that it's stale
             self.serviceError = True
+            logging.warning("Exception while running OpenWeather query", exc_info=True)
         else:
             # the return should contain 5 days of data points, 3 hours apart.
             # bin them up by day, and try to distill the bins into today (day 0), tomorrow
@@ -215,65 +227,70 @@ class WeatherForecastTile(WeatherTile):
             self.forecast = forecast
             self.locale = self.weather.get("city").get("name")
             self.serviceError = False
+        finally:
+            self.renderSemaphore.release()
 
     def render(self):
         image = super().render()
         margin = 10  # padding at top and bottom of tile and between columns
         width, height = image.get_size()
+        self.renderSemaphore.acquire()
+        try:
+            # top text
+            topTextImage = super().renderText("%s Forecast" % self.locale)
+            topWidth, topHeight = topTextImage.get_size()
+            image.blit(topTextImage, (int((width / 2) - (topWidth / 2)),
+                                      margin))
 
-        # top text
-        topTextImage = super().renderText("%s Forecast" % self.locale)
-        topWidth, topHeight = topTextImage.get_size()
-        image.blit(topTextImage, (int((width / 2) - (topWidth / 2)),
-                                  margin))
+            # weirdness: the forecast includes "today" if called in the morning
+            # but starts with "tomorrow" if called in the evening. we coped with
+            # that during data gathering by building a six-day forecast with one
+            # empty day. set the offset here so we disregard the empty day.
+            if len(self.forecast[0]) == 0:
+                offset = 1
+            else:
+                offset = 0
 
-        # weirdness: the forecast includes "today" if called in the morning
-        # but starts with "tomorrow" if called in the evening. we coped with
-        # that during data gathering by building a six-day forecast with one
-        # empty day. set the offset here so we disregard the empty day.
-        if len(self.forecast[0]) == 0:
-            offset = 1
-        else:
-            offset = 0
+            # build a list of forecast strings so we can size them and center vertically
+            forecastStrings, maxHeight = self.buildForecastStrings(offset)
 
-        # build a list of forecast strings so we can size them and center vertically
-        forecastStrings, maxHeight = self.buildForecastStrings(offset)
+            # current arrangement is a row of 3 and then a row of 2
+            topRowY = int(topHeight + 2 * margin)
+            bottomRowY = int(((height - topRowY) / 2) + topRowY)
+            columnWidth = width / 3
+            x = []
+            y = []
+            # x values for top row
+            for day in range(3):
+                x.append(int((day * columnWidth) + (margin / 2)))
+                y.append(topRowY)
+            # hacque: center day 4 between 1 and 2, 5 between 2 and 3
+            x.append(int((x[0] + x[1]) / 2))
+            y.append(bottomRowY)
+            x.append(int((x[1] + x[2]) / 2))
+            y.append(bottomRowY)
 
-        # current arrangement is a row of 3 and then a row of 2
-        topRowY = int(topHeight + 2 * margin)
-        bottomRowY = int(((height - topRowY) / 2) + topRowY)
-        columnWidth = width / 3
-        x = []
-        y = []
-        # x values for top row
-        for day in range(3):
-            x.append(int((day * columnWidth) + (margin / 2)))
-            y.append(topRowY)
-        # hacque: center day 4 between 1 and 2, 5 between 2 and 3
-        x.append(int((x[0] + x[1]) / 2))
-        y.append(bottomRowY)
-        x.append(int((x[1] + x[2]) / 2))
-        y.append(bottomRowY)
-
-        # start slapping them up there
-        iconOffset = int((columnWidth - self.iconSize) / 2)  # this is an X offset only
-        for day in range(5):
-            pygame.draw.ellipse(image,
-                                tupleColor("#B0B0FF"),
-                                pygame.Rect(x[day] + iconOffset,
-                                            y[day],
-                                            self.iconSize,
-                                            self.iconSize))
-            # have to apply offset to icon lookup since it's looking back to the "old" array
-            image.blit(self.getIcon(self.forecast[day + offset]["icon"]),
-                       (x[day] + iconOffset, y[day]))
-            forecastTextImage = super().renderText(forecastStrings[day], font=self.fontSmall)
-            image.blit(forecastTextImage, (x[day], int(y[day] + self.iconSize + (margin / 2))))
-        # error indicator
-        if self.serviceError:
-            errorIndicator = super().renderText("X", color=tupleColor("#FF0000"))
-            image.blit(errorIndicator, (0, 0))
-        return image
+            # start slapping them up there
+            iconOffset = int((columnWidth - self.iconSize) / 2)  # this is an X offset only
+            for day in range(5):
+                pygame.draw.ellipse(image,
+                                    tupleColor("#B0B0FF"),
+                                    pygame.Rect(x[day] + iconOffset,
+                                                y[day],
+                                                self.iconSize,
+                                                self.iconSize))
+                # have to apply offset to icon lookup since it's looking back to the "old" array
+                image.blit(self.getIcon(self.forecast[day + offset]["icon"]),
+                           (x[day] + iconOffset, y[day]))
+                forecastTextImage = super().renderText(forecastStrings[day], font=self.fontSmall)
+                image.blit(forecastTextImage, (x[day], int(y[day] + self.iconSize + (margin / 2))))
+            # error indicator
+            if self.serviceError:
+                errorIndicator = super().renderText("X", color=tupleColor("#FF0000"))
+                image.blit(errorIndicator, (0, 0))
+            return image
+        finally:
+            self.renderSemaphore.release()
 
     def collectDatum(self, forecast, datum):
         # in the context of this method, "forecast" is the dict for a single day's forecast

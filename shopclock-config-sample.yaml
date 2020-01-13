@@ -39,10 +39,10 @@ tiles:
   query: "from:%s -filter:retweets -filter:replies -filter:links"
   resultType: "recent"
   searches:
-  - "@AP"
-  - "@washingtonpost"
-  - "@Reuters"
-  - "@BBCWorld"
+  - "AP"
+  - "washingtonpost"
+  - "Reuters"
+  - "BBCWorld"
 #-
 #  type: CPUTemperature
 #  textColor: blue
